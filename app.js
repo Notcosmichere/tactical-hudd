@@ -1,16 +1,16 @@
-// --- PASTE YOUR KEYS HERE ---
-const MAPTILER_KEY = 'GpIzsuMQ3oVAhUxosO5E';
-const GEMINI_KEY = 'AIzaSyBpyAl53zmlekHhPavi1n2LJulLO9jTuZs';
+// --- PASTE YOUR KEYS HERE EXACTLY AS THEY APPEAR ---
+const MAPTILER_KEY = 'YOUR_MAPTILER_KEY';
+const GEMINI_KEY = 'YOUR_GEMINI_KEY';
 
-// --- MAP INITIALIZATION ---
+// --- OPTIMIZED MAP INITIALIZATION ---
 maptilersdk.config.apiKey = MAPTILER_KEY;
 const map = new maptilersdk.Map({
     container: 'map',
     style: maptilersdk.MapStyle.SATELLITE,
-    center: [-74.006, 40.7128], // Starts at NYC
+    center: [76.35, 9.6], // Set near Kerala based on your location
     zoom: 11,
-    pitch: 0,
-    terrain: true // Enables 3D terrain
+    pitch: 45, // Lower pitch and NO terrain = zero lag on mobile
+    terrain: false 
 });
 
 // Update Coordinates on HUD
@@ -19,23 +19,29 @@ map.on('move', () => {
     document.getElementById('coords').innerText = `LAT: ${c.lat.toFixed(4)} | LNG: ${c.lng.toFixed(4)}`;
 });
 
-// Google Earth Style 3D Zoom Effect
+// Smooth 3D Transition (Optimized)
 map.on('zoom', () => {
     if (map.getZoom() > 14) {
-        map.setPitch(65); // Tilts the camera for 3D buildings
+        map.setPitch(60); 
     } else {
-        map.setPitch(0);  // Flat top-down view for world map
+        map.setPitch(0);  
     }
 });
 
 
-// --- AI ANALYST (GEMINI) ---
+// --- AI ANALYST (GEMINI) WITH DEBUGGER ---
 async function askAI() {
     const aiBox = document.getElementById('ai-text');
-    aiBox.innerText = "ESTABLISHING SECURE CONNECTION... \nANALYZING TERRAIN...";
+    aiBox.innerText = "ESTABLISHING SECURE CONNECTION...";
     
+    // Safety check: Did you replace the key?
+    if (GEMINI_KEY === 'YOUR_GEMINI_KEY' || GEMINI_KEY === '') {
+        aiBox.innerText = "CRITICAL ERROR: GEMINI API KEY MISSING IN APP.JS.";
+        return;
+    }
+
     const center = map.getCenter();
-    const prompt = `You are a CIA tactical analyst. Look at the coordinates LAT: ${center.lat}, LNG: ${center.lng}. In 2 short sentences, describe the geographic features, urban density, or tactical significance of this general location. Keep it brief, gritty, and professional.`;
+    const prompt = `You are a CIA tactical analyst. Look at the coordinates LAT: ${center.lat}, LNG: ${center.lng}. In 2 short sentences, describe the geographic features, urban density, or tactical significance of this general location.`;
 
     try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`, {
@@ -47,27 +53,28 @@ async function askAI() {
         
         if (data.candidates && data.candidates[0].content) {
             aiBox.innerText = data.candidates[0].content.parts[0].text;
+        } else if (data.error) {
+            // This will tell you exactly why Gemini rejected it
+            aiBox.innerText = `API ERROR: ${data.error.message}`;
         } else {
-            aiBox.innerText = "ERROR: INTEL SERVER REJECTED REQUEST. CHECK API KEY.";
+            aiBox.innerText = "UNKNOWN ERROR: INTEL SERVER REJECTED REQUEST.";
         }
     } catch (e) {
-        aiBox.innerText = "CONNECTION INTERRUPTED. RETRYING OVER ENCRYPTED CHANNEL...";
-        console.error(e);
+        aiBox.innerText = "CONNECTION INTERRUPTED. CHECK INTERNET.";
     }
 }
 
 
-// --- LIVE FLIGHT TRACKING (OPENSKY) ---
-let flightMarkers = {}; // Stores planes to animate them
+// --- HIGH-PERFORMANCE FLIGHT TRACKING ---
+let flightMarkers = {}; 
 let scanningInterval;
 
 async function scanFlights() {
     const aiBox = document.getElementById('ai-text');
-    aiBox.innerText = "SCANNING AIRSPACE... DOWNLOADING TRANSPONDER DATA...";
+    aiBox.innerText = "SCANNING AIRSPACE...";
     
     const fetchPlanes = async () => {
         const b = map.getBounds();
-        // OpenSky API uses boundaries: lamin, lomin, lamax, lomax
         const url = `https://opensky-network.org/api/states/all?lamin=${b.getSouth()}&lomin=${b.getWest()}&lamax=${b.getNorth()}&lomax=${b.getEast()}`;
         
         try {
@@ -75,25 +82,30 @@ async function scanFlights() {
             const data = await res.json();
             
             if (data.states) {
-                aiBox.innerText = `AIRSPACE SECURE. \nTRACKING ${data.states.length} AIRCRAFT IN SECTOR.`;
-                data.states.forEach(p => {
+                // CAP AT 40 PLANES TO STOP MOBILE LAG
+                const planes = data.states.slice(0, 40); 
+                aiBox.innerText = `TRACKING ${planes.length} AIRCRAFT IN SECTOR.`;
+                
+                planes.forEach(p => {
                     const callsign = p[1] ? p[1].trim() : "UNKNOWN";
                     const lng = p[5];
                     const lat = p[6];
-                    const true_track = p[10] || 0; // Direction plane is facing
-
-                    if (!lng || !lat) return; // Skip if no location
+                    const true_track = p[10] || 0; // Flight angle
+                    
+                    if (!lng || !lat) return; 
 
                     if (flightMarkers[callsign]) {
-                        // Plane exists, animate to new location
+                        // Smoothly move existing plane
                         flightMarkers[callsign].setLngLat([lng, lat]);
                         flightMarkers[callsign].getElement().style.transform = `rotate(${true_track}deg)`;
                     } else {
-                        // New plane detected, create marker
+                        // Create new directional plane marker
                         const el = document.createElement('div');
                         el.className = 'plane-icon';
-                        el.innerHTML = '✈';
+                        // Using a clear directional airplane symbol
+                        el.innerHTML = '✈'; 
                         el.style.transform = `rotate(${true_track}deg)`;
+                        el.style.transition = "transform 0.5s linear"; // Smooth turning
                         
                         flightMarkers[callsign] = new maptilersdk.Marker({element: el})
                             .setLngLat([lng, lat])
@@ -108,34 +120,27 @@ async function scanFlights() {
         }
     };
 
-    // Run once immediately, then loop every 10 seconds to animate
     fetchPlanes();
     clearInterval(scanningInterval);
-    scanningInterval = setInterval(fetchPlanes, 10000); 
+    scanningInterval = setInterval(fetchPlanes, 15000); // Increased to 15s to save battery/reduce lag
 }
 
-
-// --- WEATHER RADAR (RAINVIEWER) ---
+// --- WEATHER RADAR ---
 let radarOn = false;
 function toggleRadar() {
     const aiBox = document.getElementById('ai-text');
     if (radarOn) {
         map.removeLayer('radar-layer');
         map.removeSource('radar');
-        aiBox.innerText = "METEOROLOGICAL RADAR DEACTIVATED.";
+        aiBox.innerText = "RADAR DEACTIVATED.";
     } else {
         map.addSource('radar', {
             type: 'raster',
             tiles: ['https://tilecache.rainviewer.com/v2/radar/nowcast_1/256/{z}/{x}/{y}/2/1_1.png'],
             tileSize: 256
         });
-        map.addLayer({ 
-            id: 'radar-layer', 
-            type: 'raster', 
-            source: 'radar', 
-            paint: { 'raster-opacity': 0.6 } 
-        });
-        aiBox.innerText = "METEOROLOGICAL RADAR ACTIVATED. SCANNING FOR PRECIPITATION.";
+        map.addLayer({ id: 'radar-layer', type: 'raster', source: 'radar', paint: { 'raster-opacity': 0.6 } });
+        aiBox.innerText = "RADAR ACTIVATED. SCANNING...";
     }
     radarOn = !radarOn;
 }
